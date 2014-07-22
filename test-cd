@@ -1,0 +1,795 @@
+-- Creating tables
+create table SMU_1
+(
+  NRIC_FIN character varying(15) not null,
+  Student_Name character(100) not null,
+  Student_ID int not null,
+  Primary_Degree character varying(100) not null,
+  Graduation_Date timestamp not null,
+  Last_School_Attended character varying(100)
+);
+
+create table SMU_2
+(
+  NRIC_FIN character varying(15) not null,
+  Student_Name character(100) not null,
+  Student_ID int not null,
+  Primary_Degree character varying(100) not null,
+  Graduation_Date timestamp not null,
+  Last_School_Attended character varying(100) not null
+);
+
+create table SMU_1_dob
+(
+  NRIC_FIN character varying(15) not null,
+  Student_Name character(100) not null,
+  Student_ID int not null,
+  Date_Of_Birth timestamp not null,
+  Primary_Degree character varying(100) not null,
+  Graduation_Date timestamp not null,
+  Last_School_Attended character varying(100)
+);
+
+create table SMU_2_dob
+(
+  NRIC_FIN character varying(15) not null,
+  Student_Name character(100) not null,
+  Student_ID int not null,
+  Date_Of_Birth timestamp not null,
+  Primary_Degree character varying(100) not null,
+  Graduation_Date timestamp not null,
+  Last_School_Attended character varying(100) not null
+);
+
+create table SMU_3
+(
+  CAMPUS_ID character varying(15) not null,
+  EMPLID int not null,
+  TERM_CD int not null,
+  TERM_ST int not null,
+  TERM_FI int not null,
+  TERM character varying(15) not null,
+  CRSE_CD character varying(15) not null,
+  CRSE_TITLE character varying(30) not null
+);
+
+-- Verified school-course list 
+create table sch_veri
+(
+crse_sch character varying(10),
+school character(5)
+);
+
+-- Centralities table
+create table smu_cent
+(
+name character varying (50),
+degree numeric,
+closeness double precision,
+betweenness double precision,
+eigen double precision
+);
+
+-- Checking SMU_3 with SMU_2,1
+
+with test as(select crse_title, campus_id from smu_3)
+select smu_2.nric_fin, smu_2.student_name, test.crse_title  
+into temp000
+from smu_2 left join test on smu_2.nric_fin=test.campus_id;
+select count(distinct(nric_fin)) from temp000;
+
+with test as(select crse_title, campus_id from smu_3)
+select smu_1.nric_fin, smu_1.student_name, test.crse_title  
+into temp001
+from smu_1 left join test on smu_1.nric_fin=test.campus_id;
+select count(distinct(nric_fin)) from temp001;
+
+-- Verifying the school and title
+
+select distinct(crse_title), crse_sch into title_verification from smu_3 
+group by crse_title, crse_sch order by crse_title, crse_sch;
+copy(select * from title_verification) 
+to '/Users/Shared/csv/title_verification.csv' csv header;
+--1
+select distinct(crse_sch) into sch_verification from smu_3 order by crse_sch;
+copy(select * from sch_verification) 
+to '/Users/Shared/csv/sch_verification.csv' csv header;
+-- 2
+select distinct(crse_sch), max(crse_title)
+into sch_verification_1 
+from smu_3  group by crse_sch order by crse_sch;
+copy(select * from sch_verification_1) 
+to '/Users/Shared/csv/sch_verification_1.csv' csv header;
+
+-- To create a master table of the data 
+select s1.*, s2.* 
+into smu_master from 
+(select s1.*, s2.school from smu_3 s1 left join sch_veri s2
+on crse_cd=trim(crse_sch)) s1
+left join 
+(select * from smu_1 union
+select * from smu_2) s2
+on
+s1.campus_id=s2.nric_fin;
+
+-- Getting the indexes done changed the purpose to prepare Gini Index
+-- test
+select distinct(nric_fin), primary_degree, extract(year from graduation_date) year_of_graduation,
+count(distinct(year_band)) Length_of_completion, count(distinct(school)) as Diversity,
+sum(case when school = 'SOSS' then 1 else 0 end) as SOSS,
+sum(case when school = 'SIS' then 1 else 0 end) as SIS,
+sum(case when school = 'SOE' then 1 else 0 end) as SOE,
+sum(case when school = 'SOA' then 1 else 0 end) as SOA,
+sum(case when school = 'SOB' then 1 else 0 end) as SOB,
+sum(case when school = 'SOL' then 1 else 0 end) as SOL,
+((sum(case when school = 'SOSS' then 1 else 0 end)::numeric/count(crse_title)::numeric)*100) as SOSS_S,
+((sum(case when school = 'SIS' then 1 else 0 end)::numeric/count(crse_title)::numeric)*100) as SIS_S,
+((sum(case when school = 'SOE' then 1 else 0 end)::numeric/count(crse_title)::numeric)*100) as SOE_S,
+((sum(case when school = 'SOA' then 1 else 0 end)::numeric/count(crse_title)::numeric)*100) as SOA_S,
+((sum(case when school = 'SOB' then 1 else 0 end)::numeric/count(crse_title)::numeric)*100) as SOB_S,
+((sum(case when school = 'SOL' then 1 else 0 end)::numeric/count(crse_title)::numeric)*100) as SOL_S,
+count(crse_title) as total_courses_taken 
+from smu_master where nric_fin is not null
+group by nric_fin, primary_degree, graduation_date 
+order by length_of_completion, year_of_graduation, nric_fin;
+-- test
+-- Run for index
+select distinct(nric_fin), primary_degree, extract(year from graduation_date) year_of_graduation,
+count(distinct(year_band)) Length_of_completion, count(distinct(school)) as Diversity,
+sum(case when school = 'SOSS' then 1 else 0 end) as SOSS,
+sum(case when school = 'SIS' then 1 else 0 end) as SIS,
+sum(case when school = 'SOE' then 1 else 0 end) as SOE,
+sum(case when school = 'SOA' then 1 else 0 end) as SOA,
+sum(case when school = 'SOB' then 1 else 0 end) as SOB,
+sum(case when school = 'SOL' then 1 else 0 end) as SOL,
+(count(distinct(school))+count(crse_title)) as weights,
+count(crse_title) as total_courses_taken into smu_indexes
+from smu_master where nric_fin is not null
+group by nric_fin, primary_degree, graduation_date 
+order by length_of_completion, year_of_graduation, nric_fin;
+-- run
+
+-- Run Course counts
+select distinct(nric_fin), primary_degree, extract(year from graduation_date) year_of_graduation,
+count(distinct(year_band)) Length_of_completion, 
+sum(case when school = 'SOSS' then 1 else 0 end) as SOSS,
+sum(case when school = 'SIS' then 1 else 0 end) as SIS,
+sum(case when school = 'SOE' then 1 else 0 end) as SOE,
+sum(case when school = 'SOA' then 1 else 0 end) as SOA,
+sum(case when school = 'SOB' then 1 else 0 end) as SOB,
+sum(case when school = 'SOL' then 1 else 0 end) as SOL,
+count(crse_title) as total_courses_taken into smu_course_counts
+from smu_master where nric_fin is not null
+group by nric_fin, primary_degree, graduation_date 
+order by length_of_completion, year_of_graduation, nric_fin;
+-- Run
+-- Export table to csv
+copy smu_indexes to '/Users/Shared/SMU_Indexes.csv' header csv;
+
+-- Getting counts of students completion date
+select length_of_completion, count(length_of_completion), 
+((count(length_of_completion)::numeric(10,1)/1685)*100) as percent
+from smu_indexes group by length_of_completion;
+
+-- Mapping students to their class mates & remove duplicates
+-- 1st
+select s1.student_name as student_1, s2.student_name as student_2, s1.crse_title, s1.term, s1.year_band
+into smu_group from smu_master s1 inner join smu_master s2 on s1.year_band=s2.year_band and s1.school=s2.school and 
+s1.term=s2.term and s1.student_name!=s2.student_name order by student_1;
+
+-- 2nd
+SELECT * INTO SMU_GROUPS FROM 
+(
+SELECT *, ROW_NUMBER() OVER (PARTITION BY STUDENT_1, STUDENT_2, CRSE_TITLE ORDER BY CRSE_TITLE) AS ROW_NUMBER
+FROM 
+(
+select s1.student_name as student_1, s2.student_name as student_2, s1.crse_title, s1.term, s1.year_band
+from smu_master s1 inner join smu_master s2 on s1.year_band=s2.year_band and s1.school=s2.school and 
+s1.term=s2.term and s1.student_name!=s2.student_name order by student_1
+) as t1
+ORDER BY STUDENT_1, STUDENT_2, CRSE_TITLE
+) AS S1 WHERE ROW_NUMBER=1;
+
+-- 3rd maybe final(USE THIS ONE)(No Duplicates ex. only A to B or B to A)
+SELECT * INTO SMU_Networks FROM 
+(
+SELECT *, ROW_NUMBER() OVER (PARTITION BY STUDENT_1, STUDENT_2, CRSE_TITLE ORDER BY CRSE_TITLE) AS ROW_NUMBER
+FROM 
+(
+select s1.student_name as student_1, s2.student_name as student_2, s1.crse_title, s1.term_cd, 
+s1.nric_fin as st1_nric, s2.nric_fin as st2_nric from smu_master s1 inner join smu_master s2 on s1.crse_title=s2.crse_title and 
+s1.term_cd=s2.term_cd and s1.nric_fin!=s2.nric_fin and s1.nric_fin < s2.nric_fin order by student_1
+) as t1
+ORDER BY STUDENT_1, STUDENT_2, st1_nric, st2_nric, CRSE_TITLE
+) AS S1 WHERE ROW_NUMBER=1;
+--
+-- Getting the weight-age of the network or links created to plot in gephi (No Duplicates ex. only A to B or B to A)
+select student_1, student_2, count(student_1) as weight into smu_networks_nodes
+from smu_networks group by student_1, student_2;
+--
+
+-- Adding in DOB into the smu_master table
+select s1.*, s2.date_of_birth into smu_master_dob
+from smu_master s1
+left join
+(select * from smu_1_dob
+union
+select * from smu_2_dob) s2 
+on 
+s1.nric_fin=s2.nric_fin;
+--
+
+-- Prepare data for finding centralities!!!! (with duplicates eg A to B and B to A)
+select student_1, student_2, count(student_1) as weight into smu_student_weights
+from
+(
+SELECT * FROM 
+(
+SELECT *, ROW_NUMBER() OVER (PARTITION BY STUDENT_1, STUDENT_2, CRSE_TITLE ORDER BY CRSE_TITLE) AS ROW_NUMBER
+FROM 
+(
+select s1.student_name as student_1, s2.student_name as student_2, s1.crse_title, s1.term_cd, 
+s1.nric_fin as st1_nric, s2.nric_fin as st2_nric from smu_master s1 inner join smu_master s2 on s1.crse_title=s2.crse_title and 
+s1.term_cd=s2.term_cd and s1.nric_fin!=s2.nric_fin order by student_1
+) as S0
+ORDER BY STUDENT_1, STUDENT_2, st1_nric, st2_nric, CRSE_TITLE
+) AS S1 WHERE ROW_NUMBER=1
+) AS S2
+group by student_1, student_2;
+--
+-- Export to csv
+copy (select * from smu_student_weights) to '/Users/Shared/smu_student_weights.csv' csv header;
+--
+
+-- Identify the top 10 centralities
+
+select name, degree from smu_cent order by degree desc limit 10
+
+select name, betweenness from smu_cent order by betweenness desc limit 10;
+
+select name, closeness from smu_cent order by closeness desc limit 10;
+
+select name, eigen from smu_cent order by eigen desc limit 10;
+--
+
+-- Merging the centralities with diversity index table
+select * into smu_div_cent from(
+select *, row_number() over (partition by nric_fin) from (
+select t1.*, t2.degree, t2.closeness, t2. betweenness, t2.eigen from smu_div_index t1
+left join (select s2.*, s1.nric_fin from smu_cent s2 left join 
+smu_master s1 on trim(s2.name)=trim(s1.student_name)) t2 on t1.nric_fin=t2.nric_fin) m1) u1
+where row_number = 1 
+--
+
+-- Getting the ego network of the people with top centralities(node list)
+copy
+(
+
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'ALOHA LIN YIXIN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'ALOHA LIN YIXIN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'ALOHA LIN YIXIN' order by weight desc
+)
+to '/Users/Shared/smu_cent_ALOHA_LIN_YIXIN.csv' csv header;
+--
+-- Getting the ego network of the people with top centralities(edge list)
+copy 
+(
+select student_1, student_2, weight 
+from smu_networks_nodes 
+where student_1 = 'CHEN WEIYUAN'and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'CHEN WEIYUAN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'CHEN WEIYUAN' order by weight desc
+)
+to '/Users/Shared/smu_cent_CHEN_WEIYUAN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'ALOHA LIN YIXIN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'ALOHA LIN YIXIN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'ALOHA LIN YIXIN' order by weight desc
+)
+to '/Users/Shared/smu_cent_ALOHA_LIN_YIXIN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight 
+from smu_networks_nodes 
+where student_1 = 'ANAND SUJITH HENRY' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'ANAND SUJITH HENRY') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'ANAND SUJITH HENRY' order by weight desc
+)
+to '/Users/Shared/smu_cent_ANAND_SUJITH_HENRY.csv' csv header;
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'CHAN KAI REN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'CHAN KAI REN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'CHAN KAI REN' order by weight desc
+)
+to '/Users/Shared/smu_cent_CHAN_KAI_REN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'CHEN SHIQIN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'CHEN SHIQIN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'CHEN SHIQIN' order by weight desc
+)
+to '/Users/Shared/smu_cent_CHEN_SHIQIN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight 
+from smu_networks_nodes 
+where student_1 = 'CHENG AILI' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'CHENG AILI') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'CHENG AILI' order by weight desc
+)
+to '/Users/Shared/smu_cent_CHENG_AILI.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'CHONG KAI RAN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'CHONG KAI RAN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'CHONG KAI RAN' order by weight desc
+)
+to '/Users/Shared/smu_cent_CHONG_KAI_RAN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'CHONG PHEY SUNG' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'CHONG PHEY SUNG') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'CHONG PHEY SUNG' order by weight desc
+)
+to '/Users/Shared/smu_cent_CHONG_PHEY_SUNG.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'CHOO TEE CHENG, KENNETH' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'CHOO TEE CHENG, KENNETH') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'CHOO TEE CHENG, KENNETH' order by weight desc
+)
+to '/Users/Shared/smu_cent_CHOO_TEE_CHENG_KENNETH.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'CHOONG HOOI SIAN, MAY' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'CHOONG HOOI SIAN, MAY') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'CHOONG HOOI SIAN, MAY' order by weight desc
+)
+to '/Users/Shared/smu_cent_CHOONG_HOOI_SIAN_MAY.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'CLINT MARK LUMANTAO GONO' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'CLINT MARK LUMANTAO GONO') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'CLINT MARK LUMANTAO GONO' order by weight desc
+)
+to '/Users/Shared/smu_cent_CLINT_MARK_LUMANTAO_GONO.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'GAN RI CHARD' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'GAN RI CHARD') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'GAN RI CHARD' order by weight desc
+)
+to '/Users/Shared/smu_cent_GAN_RI_CHARD.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'GAN ZHI WEI, MELVIN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'GAN ZHI WEI, MELVIN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'GAN ZHI WEI, MELVIN' order by weight desc
+)
+to '/Users/Shared/smu_cent_GAN_ZHI_WEI_MELVIN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'HONG JUN WEN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'HONG JUN WEN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'HONG JUN WEN' order by weight desc
+)
+to '/Users/Shared/smu_cent_HONG_JUN_WEN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'JOHN LAM ZHENREN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'JOHN LAM ZHENREN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'JOHN LAM ZHENREN' order by weight desc
+)
+to '/Users/Shared/smu_cent_OHN_LAM_ZHENREN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'KUA WEI XIANG, RICHARD' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'KUA WEI XIANG, RICHARD') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'KUA WEI XIANG, RICHARD' order by weight desc
+)
+to '/Users/Shared/smu_cent_KUA_WEI_XIANG_RICHARD.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'LIN KEQI, EUGENE' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'LIN KEQI, EUGENE') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'LIN KEQI, EUGENE' order by weight desc
+)
+to '/Users/Shared/smu_cent_LIN_KEQI_EUGENE.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'LUI WEI LOONG' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'LUI WEI LOONG') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'LUI WEI LOONG' order by weight desc
+)
+to '/Users/Shared/smu_cent_LUI_WEI_LOONG.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'MANYA BRINGI DEV' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'MANYA BRINGI DEV') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'MANYA BRINGI DEV' order by weight desc
+)
+to '/Users/Shared/smu_cent_MANYA_BRINGI_DEV.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'MOK WEN KAI' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'MOK WEN KAI') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'MOK WEN KAI' order by weight desc
+)
+to '/Users/Shared/smu_cent_MOK_WEN_KAI.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight 
+from smu_networks_nodes 
+where student_1 = 'NG KING TEN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'NG KING TEN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'NG KING TEN' order by weight desc
+)
+to '/Users/Shared/smu_cent_NG_KING_TEN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight 
+from smu_networks_nodes 
+where student_1 = 'PAN WAN JUAN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'PAN WAN JUAN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'PAN WAN JUAN' order by weight desc
+)
+to '/Users/Shared/smu_cent_PAN_WAN_JUAN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'POH LEONG CHERN, DANIEL' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'POH LEONG CHERN, DANIEL') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'POH LEONG CHERN, DANIEL' order by weight desc
+)
+to '/Users/Shared/smu_cent_POH_LEONG_CHERN_DANIEL.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight 
+from smu_networks_nodes 
+where student_1 = 'RAYNARD EZRA WELIKANDE' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'RAYNARD EZRA WELIKANDE') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'RAYNARD EZRA WELIKANDE' order by weight desc
+)
+to '/Users/Shared/smu_cent_RAYNARD_EZRA_WELIKANDE.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'SHU JIA' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'SHU JIA') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'SHU JIA' order by weight desc
+)
+to '/Users/Shared/smu_cent_SHU_JIA.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'SHU WANYI' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'SHU WANYI') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'SHU WANYI' order by weight desc
+)
+to '/Users/Shared/smu_cent_SHU_WANYI.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'TAN MINGJIAN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'TAN MINGJIAN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'TAN MINGJIAN' order by weight desc
+)
+to '/Users/Shared/smu_cent_TAN_MINGJIAN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'TAN PEI REN' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'TAN PEI REN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'TAN PEI REN' order by weight desc
+)
+to '/Users/Shared/smu_cent_TAN_PEI_REN.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'TAN WEI PING' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'TAN WEI PING') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'TAN WEI PING' order by weight desc
+)
+to '/Users/Shared/smu_cent_TAN_WEI_PING.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'TAN ZHONG YI' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'TAN ZHONG YI') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'TAN ZHONG YI' order by weight desc
+)
+to '/Users/Shared/smu_cent_TAN_ZHONG_YI.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'WEE SHU WAN, JASMINE' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'WEE SHU WAN, JASMINE') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'WEE SHU WAN, JASMINE' order by weight desc
+)
+to '/Users/Shared/smu_cent_WEE_SHU_WAN_JASMINE.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'WILLIAM KHO' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'WILLIAM KHO') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'WILLIAM KHO' order by weight desc
+)
+to '/Users/Shared/smu_cent_WILLIAM_KHO.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight
+from smu_networks_nodes 
+where student_1 = 'YEO WEI FERNG' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'YEO WEI FERNG') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'YEO WEI FERNG' order by weight desc
+)
+to '/Users/Shared/smu_cent_YEO_WEI_FERNG.csv' csv header;
+
+copy
+(
+select student_1, student_2, weight 
+from smu_networks_nodes 
+where student_1 = 'YONG QIAO YING' and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'YONG QIAO YING') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'YONG QIAO YING' order by weight desc
+)
+to '/Users/Shared/smu_cent_YONG_QIAO_YING.csv' csv header;
+
+
+
+-- Getting the Gini index for diversity index to be done 
+
+-- Checking for duplicates
+select student_1, count(student_1) from (select student_1, student_2, weight from smu_networks_nodes 
+where student_1 = 'CHEN WEIYUAN'and student_1!=student_2
+union
+select s1.student_2 as student_1, s2.student_2, s2.weight from
+(select student_2, weight from smu_networks_nodes 
+where student_1 = 'CHEN WEIYUAN') s1 left join smu_networks_nodes s2
+on s1.student_2=s2.student_1 
+where s2.student_2 != 'CHEN WEIYUAN') s2 group by student_1 order by count desc;
+
+-- First 
+select *,
+((1::numeric/6::numeric)*(6+1-2))*(((((6+1-1)*soss::numeric)
+	+
+		((6+1-2)*sis::numeric)
+	+
+		((6+1-3)*soe::numeric)
+	+
+		((6+1-4)*soa::numeric)
+	+
+		((6+1-5)*sob::numeric)
+	+
+		((6+1-6)*sol::numeric)
+))/(total_courses_taken::numeric)
+) as div_index into smu_div_index
+from smu_course_counts;
+--
+
+
+
+
+
+
+
+
